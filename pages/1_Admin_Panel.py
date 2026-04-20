@@ -1,5 +1,10 @@
 import streamlit as st
-import pandas as pd # Понадобится для красивой отрисовки таблиц
+from supabase import create_client, Client
+
+# 1. Инициализация Supabase в самом верху
+url: str = st.secrets["SUPABASE_URL"]
+key: str = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(url, key)
 
 st.set_page_config(page_title="Дашборд аналитика | SA Copilot", page_icon="🗄️", layout="wide")
 
@@ -9,65 +14,54 @@ if "authenticated" not in st.session_state:
 
 if not st.session_state.authenticated:
     st.title("🔒 Вход для сотрудников Digital Office")
-    st.info("Пожалуйста, введите пароль для доступа к дашборду заявок.")
-    
     pwd = st.text_input("Пароль", type="password")
     if st.button("Войти", type="primary"):
         if pwd == st.secrets["ADMIN_PASSWORD"]:
             st.session_state.authenticated = True
-            st.rerun() # Перезагружаем страницу, чтобы скрыть форму входа
+            st.rerun()
         else:
             st.error("❌ Неверный пароль")
-    
-    st.stop() # Этот метод не дает коду выполняться дальше, пока не введен пароль
+    st.stop() 
 
-# ================= ДАШБОРД (Виден только после входа) =================
+# ================= ДАШБОРД (Контент после авторизации) =================
 st.title("🗄️ Бэклог и аналитика заявок")
 
-# Позже здесь будет вызов (например, из Supabase) для получения списка задач
-# А пока сделаем Mock-данные (заглушку), чтобы ты оценил визуал:
-
-st.subheader("Ожидают взятия в работу")
-
-# Пример того, как мы будем выводить сгенерированные данные
-mock_task = st.expander("🚀 Временное отключение в приложении TelecomKz (Приоритет: Высокий)")
-with mock_task:
-    # Делим экран: слева вводные бизнеса, справа - работа Копайлота
-    col_biz, col_ai = st.columns(2)
+# Тот самый блок, который ты прислал:
+try:
+    # Тянем данные из базы
+    response = supabase.table("requests").select("*").order("created_at", desc=True).execute()
+    tasks = response.data
     
-    with col_biz:
-        st.markdown("### 📋 Исходные данные от бизнеса")
-        st.write("**Заказчик:** Иванов И.И. (B2C)")
-        st.write("**Проблема:** Клиенты жалуются, что не могут временно заморозить интернет...")
-        st.write("**User Story:** Я, как абонент, хочу нажать одну кнопку, чтобы заморозить списание средств.")
-        st.metric(label="Business Value", value="6/7")
-        st.metric(label="Time Criticality", value="4/7")
+    if not tasks:
+        st.write("Пока нет новых заявок.")
+    
+    for task in tasks:
+        # Создаем выпадающий список для каждой задачи
+        with st.expander(f"🚀 {task['task_name']} (От: {task['fio']})"):
+            col_biz, col_ai = st.columns(2)
+            
+            with col_biz:
+                st.markdown("### 📋 Данные бизнеса")
+                biz = task['business_data']
+                st.write(f"**Департамент:** {biz.get('department', 'Не указан')}")
+                st.write(f"**Проблема:** {biz.get('problem', 'Нет описания')}")
+                
+                # Достаем оценки
+                scores = biz.get('scores', {})
+                st.metric("Priority (BV/CT/RR)", f"{scores.get('BV', '?')}/{scores.get('CT', '?')}/{scores.get('RR', '?')}")
 
-    with col_ai:
-        st.markdown("### 🤖 Аналитика и драфт ТЗ (ИИ)")
-        st.info("**Рекомендация агента:** Задача хорошо описана. Риск: не указано, что делать с абонентами с задолженностью.")
-        
-        # Вкладки для удобной работы аналитика
-        tab1, tab2 = st.tabs(["Черновик ТЗ", "BPMN / UML код"])
-        with tab1:
-            st.text_area("Драфт ТЗ", "1. Цель...\n2. Предусловия...\n3. Основной сценарий (Happy path)...", height=200)
-        with tab2:
-            st.code("""
-@startuml
-actor Абонент
-participant "Мобильное приложение" as App
-participant "Биллинг" as Billing
-
-Абонент -> App: Нажимает "Временное отключение"
-App -> Billing: Проверка баланса
-alt Баланс > 0
-    Billing --> App: Ок, заморозка возможна
-else Баланс < 0
-    Billing --> App: Ошибка, есть долг
-end
-@enduml
-            """, language="plantuml")
-
-    # Кнопка для перевода статуса
-    if st.button("Принять в системный анализ", key="take_task_1"):
-        st.success("Задача переведена в Jira/взята в работу!")
+            with col_ai:
+                st.markdown("### 🤖 ИИ-Анализ")
+                # Здесь пока вердикт от Gemini Flash (Гейткипера)
+                st.json(task['ai_analysis'])
+                
+                # Кнопка для запуска Копайлота
+                if st.button("Запустить Копайлота (Gemini 1.5 Pro)", key=f"ai_{task['id']}"):
+                    # Сохраняем ID задачи в сессию, чтобы модель знала, что анализировать
+                    st.session_state.current_task_id = task['id']
+                    st.info("Вызываем тяжелую артиллерию для глубокой аналитики и ТЗ...")
+                    
+                    # СЮДА МЫ СЕЙЧАС ДОБАВИМ ВЫЗОВ GEMINI 1.5 PRO
+                    
+except Exception as e:
+    st.error(f"Ошибка загрузки данных из Supabase: {e}")
