@@ -1,5 +1,14 @@
 import streamlit as st
 import json
+import google.generativeai as genai
+from supabase import create_client, Client
+
+# Инициализация Supabase (вне условий, в начале скрипта)
+url: str = st.secrets["SUPABASE_URL"]
+key: str = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(url, key)
+
+# ... далее идет твой код настройки страницы и создания формы ...
 
 st.set_page_config(page_title="Инициация задачи | Казахтелеком", page_icon="📡", layout="wide")
 
@@ -149,14 +158,39 @@ if submitted:
             ai_verdict = json.loads(response.text)
             
             # 4. Отрисовка результата
+           # ... (код вызова Gemini и парсинга ai_verdict) ...
+            
             if ai_verdict.get("status") == "rejected":
                 st.error(f"❌ Заявка возвращена на доработку. Причина: {ai_verdict.get('reason')}")
-                st.warning("Пожалуйста, уточните следующие моменты для системных аналитиков:")
-                for q in ai_verdict.get("clarifying_questions", []):
-                    st.markdown(f"- {q}")
+                # ... (вывод уточняющих вопросов) ...
             else:
-                st.success("✅ Заявка одобрена Гейткипером! Содержит все необходимые вводные.")
+                st.success("✅ Заявка одобрена Гейткипером!")
                 st.balloons()
+                
+                # --- ВОТ СЮДА ВКЛЕИВАЕМ СОХРАНЕНИЕ ---
+                data_to_save = {
+                    "fio": fio,
+                    "task_name": task_name,
+                    "business_data": {
+                        "department": department,
+                        "contact": contact,
+                        "problem": problem_desc,
+                        "solution": ideal_solution,
+                        "rules": business_rules, # не забудь добавить, если в таблице есть поле
+                        "user_story": user_story,
+                        "justification": justification,
+                        "scores": {"BV": bv_score, "CT": ct_score, "RR": rr_score}
+                    },
+                    "ai_analysis": ai_verdict,
+                    "status": "new"
+                }
+
+                try:
+                    supabase.table("requests").insert(data_to_save).execute()
+                    st.info("📦 Задача успешно сохранена в базу Digital Office!")
+                except Exception as e:
+                    st.error(f"Ошибка сохранения в БД: {e}")
+                # ---------------------------------------
                 
                 # Задел под следующего агента (Копайлота)
                 st.info("🔜 Следующий шаг: Агент-Копайлот генерирует черновик ТЗ и BPMN-диаграмму...")
