@@ -84,42 +84,82 @@ with st.form("business_request_form"):
     submitted = st.form_submit_button("Отправить на ревью ИИ", type="primary", use_container_width=True)
 
 
+import google.generativeai as genai
+import json
+
+# ... (весь твой предыдущий код формы с разделами 1-5 остается без изменений) ...
+
 # ================= ЛОГИКА ОБРАБОТКИ =================
 if submitted:
-    # Валидация (проверяем, что ключевые поля не пустые)
     required_fields = [fio, contact, task_name, problem_desc, ideal_solution, user_story, justification]
     if any(not field.strip() for field in required_fields):
         st.error("⚠️ Пожалуйста, заполните все обязательные текстовые поля (отмечены *).")
     else:
-        st.info("🔄 Агент-Гейткипер (Gemini Flash) анализирует заявку...")
+        st.info("🔄 Агент-Гейткипер (Gemini-2.5-flash) анализирует заявку...")
         
-        # Здесь мы собираем все данные в один словарь, чтобы потом скормить их промпту
-        payload = {
-            "task_name": task_name,
-            "problem": problem_desc,
-            "user_story": user_story,
-            "justification": justification,
-            "scores": {"BV": bv_score, "CT": ct_score, "RR": rr_score}
+        # 1. Настраиваем API (ключ берется из .streamlit/secrets.toml)
+        try:
+            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        except Exception:
+            st.error("❌ Ошибка: Не найден GEMINI_API_KEY. Проверьте файл .streamlit/secrets.toml")
+            st.stop()
+            
+        # 2. Собираем данные в читаемый текст для модели
+        payload_text = f"""
+        Название задачи: {task_name}
+        Проблема: {problem_desc}
+        Целевая аудитория: {target_audience}
+        Идеальное решение: {ideal_solution}
+        Бизнес-правила: {business_rules}
+        User Story: {user_story}
+        Ценность (BV - {bv_score}/7): {business_value_desc}
+        Критичность времени (CT - {ct_score}/7): {time_criticality_desc}
+        Снижение рисков (RR - {rr_score}/7): {risk_reduction_desc}
+        Обоснование и расчеты: {justification}
+        """
+
+        # 3. Промпт для Гейткипера
+        system_instruction = """
+        Ты — строгий Senior Business Analyst. Твоя задача — проверить входящую заявку от бизнеса.
+        Критерии отбраковки:
+        1. Высокие оценки (5-7) для BV, CT или RR не подкреплены конкретными цифрами, метриками или расчетами в поле "Обоснование".
+        2. User Story написана некорректно (нет четкого действия или результата).
+        3. Проблема описана слишком абстрактно, без понимания текущей "боли".
+        
+        Верни ответ СТРОГО в формате JSON:
+        {
+            "status": "approved" или "rejected",
+            "reason": "Краткая причина отказа (если rejected)",
+            "clarifying_questions": ["вопрос 1", "вопрос 2"] // массив уточняющих вопросов, если rejected. Пустой, если approved.
         }
-        
-        # ---------------------------------------------------------
-        # ЗАГЛУШКА: Здесь будет реальный вызов API Claude
-        # Пока имитируем ответ для проверки UI
-        # ---------------------------------------------------------
-        mock_ai_response = {
-            "status": "rejected",
-            "reason": "Недостаточно данных в обосновании оценки. Указан высокий приоритет, но нет конкретных цифр потерь.",
-            "clarifying_questions": [
-                "Вы указали высокую критичность времени (CT). Можете назвать конкретную дату, когда наступят штрафные санкции?",
-                "В блоке расчетов нет информации о текущей стоимости ошибки. Сколько компания теряет прямо сейчас?"
-            ]
-        }
-        
-        if mock_ai_response["status"] == "rejected":
-            st.error(f"❌ Заявка возвращена на доработку. Причина: {mock_ai_response['reason']}")
-            st.warning("Бизнес-аналитик не возьмет задачу в работу, пока не будут уточнены следующие моменты:")
-            for q in mock_ai_response["clarifying_questions"]:
-                st.markdown(f"- {q}")
-        else:
-            st.success("✅ Заявка содержит все необходимые вводные! Агент генерирует BPMN и драфт ТЗ для аналитика...")
-            st.balloons()
+        """
+
+        try:
+            # Настраиваем модель на выдачу JSON
+            model = genai.GenerativeModel(
+                model_name="gemini-2.5-flash",
+                system_instruction=system_instruction,
+                generation_config={"response_mime_type": "application/json"}
+            )
+            
+            # Отправляем запрос
+            response = model.generate_content(payload_text)
+            
+            # Парсим JSON-ответ
+            ai_verdict = json.loads(response.text)
+            
+            # 4. Отрисовка результата
+            if ai_verdict.get("status") == "rejected":
+                st.error(f"❌ Заявка возвращена на доработку. Причина: {ai_verdict.get('reason')}")
+                st.warning("Пожалуйста, уточните следующие моменты для системных аналитиков:")
+                for q in ai_verdict.get("clarifying_questions", []):
+                    st.markdown(f"- {q}")
+            else:
+                st.success("✅ Заявка одобрена Гейткипером! Содержит все необходимые вводные.")
+                st.balloons()
+                
+                # Задел под следующего агента (Копайлота)
+                st.info("🔜 Следующий шаг: Агент-Копайлот генерирует черновик ТЗ и BPMN-диаграмму...")
+                
+        except Exception as e:
+            st.error(f"❌ Произошла ошибка при обращении к API: {e}")
