@@ -167,19 +167,36 @@ if submitted:
                 st.success("✅ Заявка одобрена Гейткипером!")
                 st.balloons()
                 
-                # --- ВОТ СЮДА ВКЛЕИВАЕМ СОХРАНЕНИЕ ---
+                # --- ВОТ СЮДА ВКЛЕИВАЕМ ПОЛНОЕ СОХРАНЕНИЕ ---
                 data_to_save = {
                     "fio": fio,
                     "task_name": task_name,
                     "business_data": {
+                        # Раздел 1. Общая информация
                         "department": department,
                         "contact": contact,
+                        
+                        # Раздел 2. Суть проблемы
                         "problem": problem_desc,
+                        "target_audience": target_audience, # Добавили целевую аудиторию
+                        
+                        # Раздел 3. Ожидаемое решение
                         "solution": ideal_solution,
-                        "rules": business_rules, # не забудь добавить, если в таблице есть поле
+                        "rules": business_rules, 
                         "user_story": user_story,
+                        
+                        # Раздел 4. Ценность и Приоритет (Текстовые описания)
+                        "bv_desc": business_value_desc,     # Добавили описание BV
+                        "ct_desc": time_criticality_desc,   # Добавили описание CT
+                        "rr_desc": risk_reduction_desc,     # Добавили описание RR
                         "justification": justification,
-                        "scores": {"BV": bv_score, "CT": ct_score, "RR": rr_score}
+                        
+                        # Раздел 4. Оценки (Цифры)
+                        "scores": {
+                            "BV": bv_score, 
+                            "CT": ct_score, 
+                            "RR": rr_score
+                        }
                     },
                     "ai_analysis": ai_verdict,
                     "status": "new"
@@ -187,7 +204,7 @@ if submitted:
 
                 try:
                     supabase.table("requests").insert(data_to_save).execute()
-                    st.info("📦 Задача успешно сохранена в базу Digital Office!")
+                    st.info("📦 Задача успешно сохранена со всеми деталями!")
                 except Exception as e:
                     st.error(f"Ошибка сохранения в БД: {e}")
                 # ---------------------------------------
