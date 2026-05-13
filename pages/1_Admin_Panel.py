@@ -56,13 +56,50 @@ try:
             biz = task['business_data']
             
             with col_biz:
-                st.markdown("### 📋 Данные бизнеса")
-                st.write(f"**Департамент:** {biz.get('department', '')}")
-                st.write(f"**Проблема:** {biz.get('problem', '')}")
-                st.write(f"**Решение:** {biz.get('solution', '')}")
-                st.write(f"**User Story:** {biz.get('user_story', '')}")
+                with col_biz:
+                st.markdown("### 📋 Полная анкета заказчика")
+                biz = task['business_data']
+                
+                # --- БЛОК 1: МЕТАДАННЫЕ ---
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.caption("👤 ФИО и Подразделение")
+                    st.write(f"**{task['fio']}** ({biz.get('department', '—')})")
+                with c2:
+                    st.caption("📞 Контакт")
+                    st.write(biz.get('contact', '—'))
+                
+                st.divider()
+
+                # --- БЛОК 2: ПРОБЛЕМА И ЦЕЛЬ ---
+                st.markdown("#### 🔍 Суть и контекст")
+                
+                st.markdown(f"**Что случилось?**\n\n_{biz.get('problem', '—')}_")
+                st.markdown(f"**Кого касается:** {biz.get('target_audience', '—')}")
+                
+                with st.expander("Посмотреть идеальное решение и правила"):
+                    st.markdown(f"**Как должно работать:**\n\n{biz.get('solution', '—')}")
+                    st.markdown(f"**Жесткие правила:**\n\n{biz.get('rules', '—')}")
+                
+                st.info(f"**User Story:**\n\n{biz.get('user_story', '—')}")
+
+                st.divider()
+
+                # --- БЛОК 3: БИЗНЕС-ЦЕННОСТЬ И ПРИОРИТЕТЫ ---
+                st.markdown("#### 💰 Ценность для компании")
+                
+                # Выводим показатели в ряд
                 scores = biz.get('scores', {})
-                st.metric("Priority (BV/CT/RR)", f"{scores.get('BV', '?')}/{scores.get('CT', '?')}/{scores.get('RR', '?')}")
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Value (BV)", f"{scores.get('BV', '?')}/7")
+                m2.metric("Critical (CT)", f"{scores.get('CT', '?')}/7")
+                m3.metric("Risks (RR)", f"{scores.get('RR', '?')}/7")
+
+                with st.expander("Детальное обоснование оценок"):
+                    st.markdown(f"**Польза:** {biz.get('bv_desc', '—')}")
+                    st.markdown(f"**Срочность:** {biz.get('ct_desc', '—')}")
+                    st.markdown(f"**Риски/Возможности:** {biz.get('rr_desc', '—')}")
+                    st.success(f"**Расчеты и цифры:**\n\n{biz.get('metrics', '—')}")
 
             with col_ai:
                 st.markdown("### 🤖 Копайлот Системного Анализа")
