@@ -51,20 +51,18 @@ try:
         st.write("Пока нет новых заявок.")
     
     for task in tasks:
-        with st.expander(f"🚀 {task['task_name']} (От: {task['fio']})"):
+        with st.expander(f"🚀 {task.get('task_name', 'Без названия')} (От: {task.get('fio', 'Неизвестно')})"):
             col_biz, col_ai = st.columns(2)
-            biz = task['business_data']
+            biz = task.get('business_data', {})
             
             with col_biz:
-                with col_biz:
                 st.markdown("### 📋 Полная анкета заказчика")
-                biz = task['business_data']
                 
                 # --- БЛОК 1: МЕТАДАННЫЕ ---
                 c1, c2 = st.columns(2)
                 with c1:
                     st.caption("👤 ФИО и Подразделение")
-                    st.write(f"**{task['fio']}** ({biz.get('department', '—')})")
+                    st.write(f"**{task.get('fio', '—')}** ({biz.get('department', '—')})")
                 with c2:
                     st.caption("📞 Контакт")
                     st.write(biz.get('contact', '—'))
@@ -88,7 +86,6 @@ try:
                 # --- БЛОК 3: БИЗНЕС-ЦЕННОСТЬ И ПРИОРИТЕТЫ ---
                 st.markdown("#### 💰 Ценность для компании")
                 
-                # Выводим показатели в ряд
                 scores = biz.get('scores', {})
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Value (BV)", f"{scores.get('BV', '?')}/7")
@@ -99,12 +96,12 @@ try:
                     st.markdown(f"**Польза:** {biz.get('bv_desc', '—')}")
                     st.markdown(f"**Срочность:** {biz.get('ct_desc', '—')}")
                     st.markdown(f"**Риски/Возможности:** {biz.get('rr_desc', '—')}")
-                    st.success(f"**Расчеты и цифры:**\n\n{biz.get('metrics', '—')}")
+                    # В фронтенде мы сохраняли обоснование в ключ 'justification'
+                    st.success(f"**Расчеты и цифры:**\n\n{biz.get('justification', biz.get('metrics', '—'))}")
 
             with col_ai:
                 st.markdown("### 🤖 Копайлот Системного Анализа")
                 
-                # Кнопка для запуска (используем session_state, чтобы результат не исчезал при кликах)
                 run_key = f"run_{task['id']}"
                 result_key = f"res_{task['id']}"
                 
@@ -112,9 +109,8 @@ try:
                     if st.button("Сгенерировать ТЗ и процесс (Gemini Flash)", key=run_key, type="primary"):
                         with st.spinner("Анализирую задачу, подбираю аналитика, рисую BPMN..."):
                             
-                            # Собираем данные для промпта
                             task_context = f"""
-                            Задача: {task['task_name']}
+                            Задача: {task.get('task_name', '')}
                             Аудитория/Департамент: {biz.get('department', '')}
                             Проблема: {biz.get('problem', '')}
                             Ожидание: {biz.get('solution', '')}
@@ -128,7 +124,7 @@ try:
                             2. Выбери идеального исполнителя из списка:
                             {BA_TEAM_CONTEXT}
                             3. Сформируй драфт ТЗ.
-                            4. Напиши код для диаграммы процесса в формате Mermaid.js (используй синтаксис flowchart TD или sequenceDiagram).
+                            4. Напиши код для диаграммы процесса в формате Mermaid.js (используй flowchart TD или sequenceDiagram).
                             
                             Верни строго JSON:
                             {{
@@ -148,26 +144,25 @@ try:
                             
                             ai_response = model.generate_content(task_context)
                             st.session_state[result_key] = json.loads(ai_response.text)
-                            st.rerun() # Перезагружаем интерфейс для отрисовки результата
+                            st.rerun() 
                 
-                # Если ИИ уже отработал - показываем результат красиво
                 if result_key in st.session_state:
                     ai_data = st.session_state[result_key]
                     
-                    st.success(f"**Назначено:** {ai_data['assigned_ba']}")
-                    st.caption(f"**Обоснование:** {ai_data['reasoning']}")
+                    st.success(f"**Назначено:** {ai_data.get('assigned_ba', '—')}")
+                    st.caption(f"**Обоснование:** {ai_data.get('reasoning', '—')}")
                     
-                    tab1, tab2, tab3 = st.tabs(["📝 Драфт ТЗ", "📊 Диаграмма (Mermaid)", "❓ Вопросы к бизнесу"])
+                    tab1, tab2, tab3 = st.tabs(["📝 Драфт ТЗ", "📊 Диаграмма", "❓ Вопросы к бизнесу"])
                     
                     with tab1:
-                        st.markdown(ai_data['tz_draft'])
+                        st.markdown(ai_data.get('tz_draft', ''))
                     with tab2:
-                        # Streamlit нативно рендерит Mermaid, если передать его в блок кода markdown!
-                        st.markdown(f"```mermaid\n{ai_data['mermaid_code']}\n```")
-                        with st.expander("Посмотреть исходный код диаграммы"):
-                            st.code(ai_data['mermaid_code'], language="mermaid")
+                        mermaid_code = ai_data.get('mermaid_code', '')
+                        st.markdown(f"```mermaid\n{mermaid_code}\n```")
+                        with st.expander("Исходный код диаграммы"):
+                            st.code(mermaid_code, language="mermaid")
                     with tab3:
-                        for q in ai_data['questions_for_kickoff']:
+                        for q in ai_data.get('questions_for_kickoff', []):
                             st.markdown(f"- {q}")
                     
 except Exception as e:
